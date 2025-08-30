@@ -1,0 +1,48 @@
+name: Deploy Hexo to gh-pages
+
+on:
+  push:
+    branches: [main]   # 若默认分支叫 master，请改成 master
+
+permissions:
+  contents: write      # 允许写 gh-pages 分支
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          submodules: false   # 若主题用 submodule 可改为 true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20    # 与本地 Node 版本保持一致
+
+      - name: Cache NPM dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: npm ci   # 或 npm install
+
+      - name: Build static files
+        run: |
+          npx hexo clean
+          npx hexo generate
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.HEXO_DEPLOY }}
+          publish_dir: ./public
+          publish_branch: gh-pages     # 默认就是 gh-pages
+          cname: |                    # 如果不用自定义域名可删除
+            blog.wanwusangzhi.top
