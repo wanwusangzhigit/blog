@@ -1,48 +1,57 @@
-name: Deploy Hexo to gh-pages
+name: Deploy Hexo Blog
 
 on:
   push:
-    branches: [main]   # 若默认分支叫 master，请改成 master
-
-permissions:
-  contents: write      # 允许写 gh-pages 分支
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: write
+    
     steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
-        with:
-          submodules: false   # 若主题用 submodule 可改为 true
+    # 1. 检出博客源代码
+    - name: Checkout source code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20    # 与本地 Node 版本保持一致
+    # 2. 设置 Node.js 环境
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: package-lock.json
 
-      - name: Cache NPM dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
+    # 3. 缓存 Node.js 模块
+    - name: Cache node modules
+      uses: actions/cache@v3
+      with:
+        path: node_modules
+        key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
 
-      - name: Install dependencies
-        run: npm ci   # 或 npm install
+    # 4. 安装 Hexo CLI 和项目依赖
+    - name: Install dependencies
+      run: |
+        npm install -g hexo-cli
+        npm install
 
-      - name: Build static files
-        run: |
-          npx hexo clean
-          npx hexo generate
+    # 5. 生成静态文件
+    - name: Generate static files
+      run: |
+        hexo clean
+        hexo generate
 
-      - name: Deploy to gh-pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.HEXO_DEPLOY }}
-          publish_dir: ./public
-          publish_branch: gh-pages     # 默认就是 gh-pages
-          cname: |                    # 如果不用自定义域名可删除
-            blog.wanwusangzhi.top
+    # 6. 部署到 GitHub Pages
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./public
+        publish_branch: gh-pages
