@@ -3,8 +3,6 @@ name: Deploy Hexo Blog
 on:
   push:
     branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
 
 jobs:
   build-and-deploy:
@@ -25,28 +23,56 @@ jobs:
       with:
         node-version: '20'
         cache: 'npm'
-        cache-dependency-path: package-lock.json
 
-    # 3. 缓存 Node.js 模块
-    - name: Cache node modules
-      uses: actions/cache@v3
-      with:
-        path: node_modules
-        key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
-        restore-keys: |
-          ${{ runner.os }}-node-
-
-    # 4. 安装 Hexo CLI 和项目依赖
+    # 3. 安装 Hexo CLI 和项目依赖
     - name: Install dependencies
       run: |
         npm install -g hexo-cli
         npm install
+        
+        # 安装 Matery 主题可能需要的额外插件
+        npm install hexo-generator-archive hexo-generator-category hexo-generator-index hexo-generator-tag
+        npm install hexo-renderer-ejs hexo-renderer-marked hexo-renderer-stylus
+        npm install hexo-server hexo-deployer-git
+
+    # 4. 检查主题配置
+    - name: Check theme configuration
+      run: |
+        echo "检查主题配置:"
+        grep "theme:" _config.yml || echo "未找到主题配置"
+        echo "当前目录:"
+        pwd
+        echo "主题目录内容:"
+        ls -la themes/ || echo "没有 themes 目录"
+        
+        # 确保主题目录存在
+        if [ -d "themes/matery" ]; then
+          echo "Matery 主题存在"
+          echo "Matery 主题内容:"
+          ls -la themes/matery/
+        else
+          echo "错误: Matery 主题不存在"
+          exit 1
+        fi
 
     # 5. 生成静态文件
     - name: Generate static files
       run: |
         hexo clean
-        hexo generate
+        # 尝试生成，如果失败则显示详细错误
+        hexo generate --debug || (echo "生成失败，显示详细错误:" && hexo generate --debug)
+        
+        # 检查生成结果
+        if [ -f "public/index.html" ]; then
+          echo "index.html 已生成"
+          echo "文件大小:"
+          wc -c public/index.html
+        else
+          echo "错误: index.html 未生成"
+          echo "public 目录内容:"
+          ls -la public/ || echo "public 目录不存在"
+          exit 1
+        fi
 
     # 6. 部署到 GitHub Pages
     - name: Deploy to GitHub Pages
@@ -55,3 +81,4 @@ jobs:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         publish_dir: ./public
         publish_branch: gh-pages
+        force_orphan: true  # 确保 gh-pages 分支只包含最新内容
